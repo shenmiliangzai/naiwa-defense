@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>奶蛙守家</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#171910;color:#25271a;font:16px system-ui,sans-serif;display:grid;place-items:center;min-height:100svh}main{width:min(100%,460px);padding:22px;background:#fff8df;border-radius:24px}header{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:800}h1{font-size:clamp(30px,8vw,46px);margin:12px 0 3px;letter-spacing:-.05em}p{margin:0 0 12px}.stage{position:relative;height:clamp(210px,43svh,340px);overflow:hidden;border:2px solid;border-radius:20px;background:radial-gradient(circle,#fffce8 5%,#f6df87 100%);isolation:isolate}.frog,.penguin{position:absolute;bottom:11%;background-repeat:no-repeat;mix-blend-mode:multiply;transform-origin:center bottom}.frog{width:39%;aspect-ratio:280/470;left:25%;background-image:url('素材/奶蛙.png');background-size:289% auto;background-position:3% 64%;transform:scale(var(--sx,1),var(--sy,1))}.penguin{width:25%;aspect-ratio:221/426;right:4%;background-image:url('素材/凑企鹅.png');background-size:487% auto;background-position:39.7% 56%;z-index:1}.stage[data-state=won] .frog{animation:laugh .24s 5 alternate}.stage[data-state=lost] .frog{animation:splat .42s forwards}.stage[data-state=lost] .penguin{animation:waddle .15s 6 alternate}@keyframes laugh{to{transform:scale(1.13,.86) rotate(-6deg)}}@keyframes splat{35%{transform:scale(1.5,1.2)}to{transform:scale(2,.22)}}@keyframes waddle{to{transform:rotate(9deg)}}.meter{height:20px;position:relative;background:#e5dbc1;border:2px solid;border-radius:10px;overflow:hidden;margin:13px 0 5px}.zone,.fill{position:absolute;top:0;bottom:0}.fill{left:0;background:#e4a221;width:0}.zone{left:82%;width:18%;background:#d3eb85;border-left:2px solid;opacity:.75}.needle{position:absolute;left:0;top:0;bottom:0;border-left:3px solid}.hint{font-size:12px;text-align:right}.result{min-height:48px;margin:10px 0 4px;font-weight:800}.action{width:100%;border:2px solid #25271a;border-radius:15px;background:#d5ef72;color:inherit;font:900 20px system-ui;padding:12px;box-shadow:0 4px #25271a;cursor:pointer;touch-action:manipulation}.action:active{transform:translateY(3px);box-shadow:0 1px #25271a}.sound{background:transparent;border:1px solid;border-radius:100px;padding:5px 10px;cursor:pointer}small{display:block;margin-top:12px;color:#535440}@media(prefers-reduced-motion:reduce){.frog,.penguin{animation:none!important}}
+.laugh-clip{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}.stage[data-state=won] .frog{display:none}.pump{display:none;position:absolute;z-index:2;right:23%;bottom:10%;width:34px;height:96px;pointer-events:none}.stage[data-state=playing] .pump{display:block}.pump-barrel{position:absolute;bottom:0;left:8px;width:18px;height:47px;background:#e76d43;border:2px solid #25271a;border-radius:5px}.pump-handle{position:absolute;top:9px;left:0;width:34px;height:8px;background:#25271a;border-radius:4px;transform:translateY(var(--stroke,0px))}.pump-handle::after{content:'';position:absolute;top:5px;left:15px;width:4px;height:35px;background:#25271a}.pump-hose{position:absolute;bottom:2px;right:24px;width:67px;height:26px;border:4px solid #25271a;border-top:0;border-radius:0 0 18px 18px}.stage[data-state=playing] .penguin{transform:translateY(calc(var(--stroke,0px) * .48)) rotate(-7deg)}@media(prefers-reduced-motion:reduce){.stage[data-state=playing] .penguin,.pump-handle{transform:none}}
+.result-clip{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:3;background:#fae9a5}.zone{left:var(--target,92%);width:auto;right:0}
+.burst{display:none;position:absolute;z-index:2;left:44%;top:53%;width:0;height:0;pointer-events:none}.stage[data-state=lost] .burst{display:block}.burst i{position:absolute;width:18px;height:14px;border-radius:50%;background:#ffb82e;border:1px solid #bc7621;opacity:0;animation:scatter .46s ease-out both;transform:rotate(var(--angle))}.burst i:nth-child(even){background:#fff0a1;width:12px;height:12px}@keyframes scatter{0%{opacity:1;transform:rotate(var(--angle)) translateX(10px) scale(.6)}45%{opacity:1}100%{opacity:0;transform:rotate(var(--angle)) translateX(104px) scale(.4)}}@media(prefers-reduced-motion:reduce){.burst{visibility:hidden}}
+.levels{display:flex;gap:6px;margin:12px 0}.levels button{flex:1;border:1px solid #25271a;border-radius:10px;background:#fff8df;padding:7px 3px;color:inherit;cursor:pointer}.levels button[aria-pressed=true]{background:#d5ef72;font-weight:800}
+.pump-win{width:min(88vw,370px);max-height:90svh;overflow:auto;padding:18px;border:2px solid #25271a;border-radius:20px;background:#fff8df;color:#25271a;text-align:center}.pump-win::backdrop{background:#171910c9}.pump-win h2{margin:0 0 10px}.pump-win img{display:block;width:min(100%,220px);aspect-ratio:1;object-fit:contain;margin:0 auto 14px;border-radius:14px}.pump-win .action:disabled{opacity:.5;cursor:default}
+</style>
+<style>
+.level-home{width:min(94vw,460px);max-height:94svh;overflow:auto;padding:22px;border:2px solid #25271a;border-radius:24px;background:#fff8df;color:#25271a}.level-home::backdrop{background:#171910}.level-home h2{font-size:34px;margin:0 0 15px;letter-spacing:-.06em}.level-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.level-grid button,.home-link{border:1px solid #25271a;border-radius:12px;color:inherit;background:#f7e8ae;padding:10px;text-align:left;cursor:pointer}.level-grid button:hover,.level-grid button:focus-visible{background:#d5ef72}.level-grid strong,.level-grid span{display:block}.level-grid span{font-size:12px;margin-top:4px}.home-link{padding:5px 10px}.challenge{position:absolute;z-index:2;inset:12px 8px auto;text-align:center;font-size:clamp(21px,6vw,36px);font-weight:900;white-space:pre-line;text-shadow:0 1px #fff}.choices{display:flex;gap:8px}.choices[hidden]{display:none}.choices button{font-size:17px}
+</style>
+<style>
+.stage[data-mode=sort] .pump,.stage[data-mode=sneak] .pump,.stage[data-mode=memory] .pump{display:none}.stage[data-mode=sneak][data-state=playing] .frog{transform:translateX(var(--sneak-step,0px));transition:transform .15s}.stage[data-mode=sneak][data-state=playing] .penguin{transform:rotate(var(--sleep-tilt,0deg));transition:transform .15s}.stage[data-mode=memory][data-state=playing] .frog{transform:rotate(var(--move-tilt,0deg)) scaleY(var(--move-squash,1));transition:transform .13s}
+</style>
+<style>
+.sneak-road{display:none;position:absolute;left:4%;right:26%;bottom:7%;height:24px;align-items:center;justify-content:space-around;padding:2px 4px;border:2px solid #876439;border-radius:9px;background:#ba925d}.sneak-road i{width:12%;height:90%;border-radius:5px;background:#e7ca8c;border:1px solid #9e784c}.sneak-road i[data-passed]{background:#d5ef72}.stage[data-mode=sneak] .sneak-road{display:flex}.stage[data-mode=sneak] .frog{width:29%;left:calc(-5% + var(--sneak-step,0%));bottom:12%;z-index:1}.stage[data-mode=sneak][data-state=playing] .frog{transform:none;transition:left .15s ease-out}
+@media(prefers-reduced-motion:reduce){.stage[data-mode=sneak][data-state=playing] .frog{transition:none}}
+.sneak-road{left:14%}
+</style>
+<style>
+.rhythm-track{display:none;position:absolute;inset:32px 12% 22px;z-index:2;border:1px solid #25271a;border-radius:12px;background:linear-gradient(90deg,#fff8dfec 49.5%,#25271a 49.5% 50.5%,#fff8dfec 50.5%);overflow:hidden}.stage[data-mode=rhythm][data-state=playing] .rhythm-track{display:block}.stage[data-mode=rhythm] .pump{display:none}.rhythm-line{position:absolute;top:78%;width:100%;border-top:3px dashed #55741b}.rhythm-note{position:absolute;left:var(--lane);top:0;width:30px;height:30px;display:grid;place-items:center;border-radius:50%;border:2px solid #25271a;background:#f3b442;transform:translate(-50%,-50%);animation:drop-note var(--travel) linear both}.rhythm-note.right{background:#b9def4}@keyframes drop-note{from{top:0}to{top:78%}}
+</style>
+<style>
+.defense-board{display:none;position:absolute;inset:0;z-index:2;grid-template-columns:repeat(3,1fr);background:#dbe9aa}.stage[data-mode=defense][data-state=playing] .defense-board{display:grid}.stage[data-mode=defense] .pump{display:none}.defense-lane{touch-action:manipulation;position:relative;overflow:hidden;border:0;border-right:2px dashed #8da16b;background:linear-gradient(#dae8ad,#ebf0c9);cursor:pointer;color:#25271a}.defense-lane:last-child{border-right:0}.defense-lane:focus-visible{outline:3px solid #365c27;outline-offset:-4px}.defense-gate{position:absolute;bottom:0;left:0;right:0;height:23%;display:grid;place-items:center;border-top:3px solid #8da16b;background:#faf2c8;font-size:12px;font-weight:800}.defense-frog,.defense-enemy{display:block;background-repeat:no-repeat;aspect-ratio:280/470;pointer-events:none}.defense-frog{width:26px;background-image:url('素材/奶蛙.png');background-size:289% auto;background-position:3% 64%;mix-blend-mode:multiply}.defense-enemy{position:absolute;top:0;left:50%;width:clamp(27px,9vw,43px);background-image:url('素材/凑企鹅.png');background-size:487% auto;background-position:39.7% 56%;transform:translateX(-50%);mix-blend-mode:multiply}.defense-enemy.armored{filter:drop-shadow(0 0 3px #e29231)}.defense-enemy.armored::after{content:attr(data-hp);position:absolute;right:-5px;top:0;border-radius:10px;background:#f6b64d;padding:1px 4px;font:bold 12px system-ui}.defense-lane.fire::after{content:'';position:absolute;left:50%;top:4%;bottom:23%;width:6px;border-radius:8px;pointer-events:none;background:#ffad2e;box-shadow:0 0 11px #ffda74;animation:milk-shot .16s ease-out both}@keyframes milk-shot{to{opacity:0}}
+</style>
+<style>
+.defense-board{grid-template-columns:none;overflow:hidden;touch-action:none;cursor:ew-resize;background:radial-gradient(ellipse at 18% 29%,#fff 0 4%,transparent 4.5%),radial-gradient(ellipse at 77% 50%,#fff 0 5%,transparent 5.5%),linear-gradient(#dbe9f1,#fff7e5 83%);outline-offset:-4px}
+.defense-yard{position:absolute;inset:0;pointer-events:none}.yard-fence{position:absolute;inset:85% 0 0;background:linear-gradient(transparent 13%,#9f7349 13% 25%,transparent 25% 55%,#9f7349 55% 67%,transparent 67%),repeating-linear-gradient(90deg,#ce9d66 0 12px,#fad8a7 12px 15px,transparent 15px 26px),#f0dfbc;border-top:2px dashed #997751}.yard-home{position:absolute;bottom:1%;left:50%;transform:translateX(-50%);background:#fff8df;border:1px solid #a77a4e;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:900}.yard-shooter,.invader-body{background-repeat:no-repeat;mix-blend-mode:multiply}.yard-shooter{position:absolute;left:50%;top:77%;width:clamp(27px,10%,42px);aspect-ratio:280/470;background-image:url('素材/奶蛙.png');background-size:289% auto;background-position:3% 64%;transform:translateX(-50%);transform-origin:center bottom;z-index:2}.invader{position:absolute;width:clamp(26px,10%,43px);aspect-ratio:221/426;transform:translate(-50%,-45%)}.invader-body{display:block;width:100%;height:88%;background-image:url('素材/凑企鹅.png');background-size:487% auto;background-position:39.7% 56%;animation:penguin-run .31s alternate infinite ease-in-out}.invader i{position:absolute;bottom:9%;left:26%;width:19%;height:10%;border-radius:60% 30%;background:#dc883e;animation:penguin-foot .31s alternate infinite ease-in-out}.invader i+i{left:54%;animation-direction:alternate-reverse}.invader b{position:absolute;top:-7px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;background:#ffdb8f;color:#422708;border:1px solid #b97730;border-radius:9px;padding:1px 5px}.invader.armor .invader-body{filter:drop-shadow(0 0 3px #a2864f)}.invader.dash b{background:#ffb382}.invader.sway b{background:#d8c2ff}.invader.sprinting i,.invader.sprinting .invader-body{animation-duration:.14s}.milk-shot,.milk-splash{position:absolute;transform:translate(-50%,-50%);pointer-events:none}.milk-shot{width:8px;height:15px;border-radius:75% 75% 55% 55%;background:#fffdf3;border:1px solid #cd9b50;box-shadow:0 0 5px #ffe4ae}.milk-splash{width:24px;height:24px;border:4px dotted #f4b54d;border-radius:50%;animation:milk-pop .23s ease-out both}.defense-upgrades .level-grid{grid-template-columns:1fr}
+@keyframes penguin-run{from{transform:rotate(-8deg) translateY(-2px)}to{transform:rotate(8deg) translateY(1px)}}@keyframes penguin-foot{to{transform:translateY(6px) rotate(12deg)}}@keyframes milk-pop{to{transform:translate(-50%,-50%) scale(1.65);opacity:0}}@media(prefers-reduced-motion:reduce){.invader-body,.invader i{animation:none}}
+</style>
+<style>
+.upgrade-paused .invader-body,.upgrade-paused .invader i{animation-play-state:paused}.stage[data-mode=defense][data-state=playing] .defense-board{right:76px}.defense-stats{display:none;position:absolute;z-index:2;inset:0 0 0 auto;width:76px;padding:8px 5px;background:#fcf0cf;border-left:1px solid #a77a4e;font-size:11px}.stage[data-mode=defense][data-state=playing] .defense-stats{display:block}.defense-stats h2{font-size:12px;margin:0 0 8px}.defense-stats dl{margin:0}.defense-stats dl div{display:flex;justify-content:space-between;align-items:center;gap:2px;padding:5px 0;border-top:1px solid #dccba3}.defense-stats dd{margin:0;font-weight:800;overflow-wrap:anywhere}.defense-stats dd:empty{display:none}
+</style>
+<style>
+.invader,.invader-body,.invader i,.invader b{border:0;outline:0}.invader.armor .invader-body{filter:none}
+.penguin,.invader-body{background-image:url('素材/凑企鹅-透明立绘.png');background-size:contain;background-position:center;mix-blend-mode:normal}
+.defense-board,.defense-board *{user-select:none;-webkit-user-select:none;-webkit-user-drag:none}.defense-board[data-dragging]{cursor:grabbing}
+</style>
+<style>
+.ad-slot{margin-top:12px;border:1px dashed #c3aa64;border-radius:10px;background:#f9edc5;color:#594820;font-size:12px;padding:7px 10px;text-align:center}.ad-slot[hidden]{display:none}.ad-slot p{margin:0}.ad-slot button{margin-top:5px;border:1px solid #bda66b;border-radius:7px;padding:5px 9px;background:#fff8df;color:#594820}.ad-slot button:disabled{opacity:.65}
+</style>
+<style>
+#ad-defense-result:has(#ad-defense-revive:not([hidden])){border:2px solid #a17b2d;background:#fff3c3;padding:12px;margin-top:15px;border-radius:16px}
+#ad-defense-revive{display:block;width:100%;min-height:54px;margin:0 0 10px;padding:9px 12px;border:2px solid #30230a;border-radius:12px;background:#ffcd4d;color:#30230a;font-size:clamp(17px,5vw,22px);font-weight:900;box-shadow:0 3px #30230a;cursor:pointer}
+#ad-defense-revive[hidden]{display:none}#ad-defense-revive:enabled:hover{background:#ffdb76}#ad-defense-revive:enabled:active{transform:translateY(2px);box-shadow:0 1px #30230a}
+</style>
+<main>
+  <header><span>奶蛙 × 凑企鹅</span><button class="sound" id="shop-button" type="button">金币商店</button><button class="sound" id="sound" type="button" aria-pressed="false">静音</button></header>
+  <button type="button" class="home-link" id="open-levels">返回选关</button>
+  <h1 id="title">奶蛙禁止膨胀</h1>
+  <p id="instructions">等指针进绿区，再让凑企鹅放气。</p>
+  <div class="stage" id="stage">
+    <div class="sneak-road" id="sneak-road"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="frog" id="frog"></div>
+    <div class="penguin"></div>
+    <div class="pump"><div class="pump-hose"></div><div class="pump-handle"></div><div class="pump-barrel"></div></div>
+    <div class="burst"><i style="--angle:0deg"></i><i style="--angle:45deg"></i><i style="--angle:90deg"></i><i style="--angle:135deg"></i><i style="--angle:180deg"></i><i style="--angle:225deg"></i><i style="--angle:270deg"></i><i style="--angle:315deg"></i></div>
+    <div id="celebration"></div>
+    <div class="defense-board" id="defense-board" tabindex="0" aria-label="守家战场，拖动或用左右方向键移动">
+      <div class="defense-yard"><div class="yard-fence"></div><span class="yard-home">奶蛙的家</span></div>
+      <div id="defense-actors" aria-hidden="true"></div>
+      <div class="yard-shooter" id="defense-shooter" aria-hidden="true"></div>
+    </div>
+    <aside class="defense-stats" aria-label="本局能力等级">
+      <h2>本局能力</h2>
+      <dl>
+        <div><dt>战力</dt><dd id="defense-power"></dd></div>
+        <div><dt>射速</dt><dd id="defense-rate"></dd></div>
+        <div><dt>伤害</dt><dd id="defense-damage"></dd></div>
+        <div><dt>弹道</dt><dd id="defense-paths"></dd></div>
+        <div><dt>穿透</dt><dd id="defense-pierce"></dd></div>
+        <div><dt>修补</dt><dd id="defense-repair"></dd></div>
+        <div><dt>栅栏</dt><dd id="defense-fence"></dd></div>
+        <div><dt>奶浪</dt><dd id="defense-sweep"></dd></div>
+      </dl>
+    </aside>
+    <div class="rhythm-track" id="rhythm-track"><div class="rhythm-line"></div></div>
+    <div class="challenge" id="challenge"></div>
+  </div>
+  <div class="meter" aria-hidden="true"><div class="fill" id="fill"></div><div class="zone"></div><div class="needle" id="needle"></div></div>
+  <div class="hint" id="target-hint">绿区 92%–99%</div>
+  <div id="result" class="result" role="status">最高分 0</div>
+  <button id="action" class="action" type="button">开始膨胀</button>
+  <div class="choices" id="choices" hidden>
+    <button class="action" type="button" id="choice-left"></button>
+    <button class="action" type="button" id="choice-right"></button>
+  </div>
+  <small>触屏或鼠标操作 · 电脑也可用空格</small>
+  <aside class="ad-slot" id="ad-defense-start" data-ad-placement="defense_start_banner" aria-label="守家开局页广告预留位" hidden>
+    <p>广告预留 · 守家开局横幅</p>
+  </aside>
+  <aside class="ad-slot" id="ad-defense-result" data-ad-placement="defense_result_rewarded" aria-label="守家结算激励视频预留位" hidden>
+    <button type="button" id="ad-defense-revive" data-ad-placement="defense_revive_rewarded" hidden>看广告复活并清场</button>
+    <button type="button" disabled>看视频，领取额外金币</button>
+    <p>激励视频预留 · 暂未接入</p>
+    <p id="ad-revive-status" role="status"></p>
+  </aside>
+</main>
+<dialog class="level-home" id="level-home" aria-labelledby="level-home-title">
+  <h2 id="level-home-title">奶蛙 × 凑企鹅</h2>
+  <button class="home-link" id="home-shop" type="button">金币商店</button>
+  <div class="level-grid">
+    <button type="button" data-level="defense" aria-pressed="true"><strong>奶蛙守家</strong><span>拖动射击，无尽守家</span></button>
+    <button type="button" data-level="timing" aria-pressed="false"><strong>压线放气</strong><span>盯着指针，卡进绿区</span></button>
+    <button type="button" data-level="pump" aria-pressed="false"><strong>狂按打气</strong><span>倒计时内把气打满</span></button>
+    <button type="button" data-level="hold" aria-pressed="false"><strong>憋住别松</strong><span>按住蓄力，掐点松手</span></button>
+    <button type="button" data-level="sort" aria-pressed="false"><strong>谁的夜宵</strong><span>牛奶给蛙，小鱼给企鹅</span></button>
+    <button type="button" data-level="sneak" aria-pressed="false"><strong>别吵醒凑企鹅</strong><span>闭眼才走，睁眼就停</span></button>
+    <button type="button" data-level="memory" aria-pressed="false"><strong>奶蛙跟拍</strong><span>看动作，再按顺序复述</span></button>
+    <button type="button" data-level="endless" aria-pressed="false"><strong>无尽夜宵</strong><span>越分越快，挑战最高连击</span></button>
+    <button type="button" data-level="rhythm" aria-pressed="false"><strong>蛙企鹅拍</strong><span>无尽接拍，精准连击加分</span></button>
+  </div>
+  <aside class="ad-slot" data-ad-placement="level_menu_banner" aria-label="选关页广告预留位">
+    <p>广告预留 · 选关页横幅</p>
+  </aside>
+</dialog>
+<dialog class="level-home" id="shop" aria-labelledby="shop-title">
+  <h2 id="shop-title">金币商店</h2>
+  <p id="wallet" role="status"></p>
+  <label><input type="checkbox" id="boost-enabled"> 启用已购买的道具</label>
+  <div class="level-grid" id="shop-items" style="margin:12px 0"></div>
+  <p id="shop-status" role="status"></p>
+  <button class="home-link" id="shop-back" type="button">返回</button>
+</dialog>
+<dialog class="pump-win" id="pump-win" aria-labelledby="pump-win-title">
+  <h2 id="pump-win-title">打气成功！</h2>
+  <div id="pump-win-animation"></div>
+  <p id="pump-win-reward"></p>
+  <button class="action" id="pump-replay" type="button">再来一局</button>
+</dialog>
+<audio id="laugh" preload="auto" src="素材/奶蛙-捧腹大笑-桌宠版.wav"></audio>
+<audio id="fail" preload="auto" src="素材/凑企鹅-高松灯二创-咕咕嘎嘎-超绝尾音.mp3"></audio>
+<style>.stage[data-mode=endless] .pump{display:none}</style>
+<dialog class="level-home defense-upgrades" id="defense-upgrades" aria-labelledby="defense-upgrades-title">
+  <h2 id="defense-upgrades-title">选一张强化卡</h2>
+  <p>击退了强化企鹅。选好就继续守家。</p>
+  <div class="level-grid" id="defense-cards"></div>
+</dialog>
+<script src="game.js"></script>
+<script src="levels.js"></script>
+<script src="economy.js"></script>
+<script src="challenges.js"></script>
+<script src="defense.js"></script>
+<script src="ad-slots.js"></script>
+</html>
