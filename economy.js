@@ -39,11 +39,22 @@ function refreshBoostHint() {
     levelId === 'rhythm' ? '精准 100 · 不错 70 · 接住 40｜每 5 连击 +50' : '';
 }
 
+const defenseMilestoneSeconds = 18;
+const defenseMilestoneCoins = 10;
+
+function defenseCoinBreakdown() {
+  return {
+    battle: Math.min(50, Math.floor(defense.score / 10)),
+    milestone: defense.time >= defenseMilestoneSeconds ? defenseMilestoneCoins : 0,
+  };
+}
+
 function awardCoins(won) {
   let earned = won ? 20 : 0;
   if (levelId === 'endless' || levelId === 'rhythm') earned = Math.min(30, count * 2);
   if (levelId === 'defense') {
-    const total = Math.min(50, Math.floor(defense.score / 10));
+    const {battle, milestone} = defenseCoinBreakdown();
+    const total = battle + milestone;
     earned = Math.max(0, total - defense.rewardPaid);
     defense.rewardPaid = Math.max(defense.rewardPaid, total);
   }

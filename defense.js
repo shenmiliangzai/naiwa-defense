@@ -2,9 +2,15 @@ const battlefield = byId('defense-board');
 const fieldActors = byId('defense-actors');
 const shooter = byId('defense-shooter');
 const upgrades = byId('defense-upgrades');
+const defenseStory = byId('defense-story');
+let defenseStorySeen = false;
 const initialFireInterval = .34;
 const penguinCry = new Audio('素材/凑企鹅糖哭.wav');
 const eliteDefeat = new Audio('素材/cnmd.wav');
+const battleLaugh = new Audio('素材/奶蛙-捧腹大笑-桌宠版.wav');
+const battleLaughDuration = 2.2;
+battleLaugh.volume = .45;
+let battleLaughTimer;
 penguinCry.preload = 'auto';
 penguinCry.volume = .55;
 eliteDefeat.preload = 'auto';
@@ -12,7 +18,17 @@ eliteDefeat.volume = .55;
 const activeCries = new Map();
 const cryPool = [penguinCry];
 const maxCryVoices = 8;
+const battleBuffers = new Map();
+const battleLoading = new Set();
+const battleVoices = new Map();
+const fence = battlefield.querySelector('.yard-fence');
+const defenseMeter = document.querySelector('.meter');
+const milestoneProgress = byId('defense-milestone-progress');
+const milestoneText = byId('defense-milestone-text');
+milestoneProgress.max = defenseMilestoneSeconds;
+let breachTimer;
 let dragPointer = null;
+let dragOrigin;
 let defenseBest = 0;
 try { defenseBest = Number(localStorage.getItem('naiwa-defense-best')) || 0; } catch {}
 
@@ -47,16 +63,72 @@ function stopPenguinCry() {
 function stopDefenseSounds() {
   stopPenguinCry();
   eliteDefeat.pause();
+  clearTimeout(battleLaughTimer);
+  battleLaugh.pause();
+  for (const source of battleVoices.keys()) source.stop();
+  battleVoices.clear();
+}
+
+function loadBattleAudio() {
+  if (!audioContext || location.protocol === 'file:') return;
+  for (const clip of [penguinCry, eliteDefeat, battleLaugh]) {
+    if (battleBuffers.has(clip) || battleLoading.has(clip)) continue;
+    battleLoading.add(clip);
+    fetch(clip.src).then(response => {
+      if (!response.ok) throw new Error('Battle audio unavailable');
+      return response.arrayBuffer();
+    }).then(bytes => audioContext.decodeAudioData(bytes))
+      .then(buffer => battleBuffers.set(clip, buffer))
+      .catch(() => {})
+      .finally(() => battleLoading.delete(clip));
+  }
+}
+
+function balanceBattleAudio() {
+  const volume = .55 / Math.pow(Math.max(1, battleVoices.size), .75);
+  for (const {gain} of battleVoices.values()) gain.gain.value = volume;
+}
+
+function playBattleBuffer(clip, duration) {
+  const buffer = battleBuffers.get(clip);
+  if (!buffer || audioContext.state !== 'running') return false;
+  for (const [source, voice] of battleVoices) {
+    if (voice.clip === clip && clip === eliteDefeat) {
+      battleVoices.delete(source);
+      source.stop();
+    }
+  }
+  if (battleVoices.size >= maxCryVoices) {
+    const oldest = battleVoices.keys().next().value;
+    battleVoices.delete(oldest);
+    oldest.stop();
+  }
+  const source = audioContext.createBufferSource();
+  const gain = audioContext.createGain();
+  source.buffer = buffer;
+  source.connect(gain).connect(audioContext.destination);
+  battleVoices.set(source, {clip, gain});
+  source.onended = () => {
+    battleVoices.delete(source);
+    source.disconnect();
+    gain.disconnect();
+    balanceBattleAudio();
+  };
+  balanceBattleAudio();
+  source.start(0, 0, Math.min(duration, buffer.duration));
+  return true;
 }
 
 function playEliteSound() {
   if (muted) return;
+  if (playBattleBuffer(eliteDefeat, Infinity)) return;
   eliteDefeat.currentTime = 0;
   eliteDefeat.play().catch(() => {});
 }
 
 function playPenguinCry() {
   if (muted) return;
+  if (playBattleBuffer(penguinCry, 1.65)) return;
   let voice = cryPool.find(clip => !activeCries.has(clip));
   if (!voice && cryPool.length < maxCryVoices) {
     voice = penguinCry.cloneNode();
@@ -99,6 +171,9 @@ function enemyStats(type) {
 }
 
 function clearDefenseEnemies() {
+  clearTimeout(breachTimer);
+  fence.classList.remove('breached');
+  defenseMeter.classList.remove('breached');
   fieldActors.replaceChildren();
   defense.enemies = [];
   defense.shots = [];
@@ -130,6 +205,14 @@ function spawnEnemy(type) {
     badge.textContent = type === 'normal' ? hp : eliteNames[type] + ' ' + hp;
     element.append(badge);
     enemy.badge = badge;
+    if (type !== 'normal') {
+      const health = document.createElement('progress');
+      health.className = 'elite-health';
+      health.max = health.value = hp;
+      badge.append(health);
+      enemy.health = health;
+      enemy.badgeLabel = badge.firstChild;
+    }
   }
   placeActor(enemy);
   fieldActors.append(element);
@@ -141,12 +224,15 @@ function fireMilk() {
   for (const offset of offsets) {
     const element = document.createElement('span');
     element.className = 'milk-shot';
+    if (defense.damage > 1) element.classList.add('charged-shot');
+    if (defense.pierce) element.classList.add('piercing-shot');
     const shot = {element, x: defense.x + offset, y: 79, damage: defense.damage,
       hits: new Set(), remaining: defense.pierce ? 2 : 1};
     placeActor(shot);
     fieldActors.append(element);
     defense.shots.push(shot);
   }
+  if (defense.ranks.rate > 0) showBattlePop(defense.x, 79, '', 'rapid-flash');
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   shooter.animate([
     {transform: 'translateX(-50%) scale(1)'},
@@ -155,12 +241,31 @@ function fireMilk() {
   ], {duration: 170});
 }
 
-function milkSplash(x, y) {
+function milkSplash(x, y, defeated = false) {
   const splash = document.createElement('span');
-  splash.className = 'milk-splash';
+  splash.className = defeated ? 'milk-splash defeat-splash' : 'milk-splash';
   placeActor({element: splash, x, y});
   fieldActors.append(splash);
   splash.addEventListener('animationend', () => splash.remove(), {once: true});
+}
+
+function showBattlePop(x, y, label, className = '') {
+  const element = document.createElement('span');
+  element.className = 'defense-pop ' + className;
+  element.textContent = label;
+  placeActor({element, x: Math.max(12, Math.min(88, x)), y});
+  fieldActors.append(element);
+  element.addEventListener('animationend', () => element.remove(), {once: true});
+}
+
+function flashBreach() {
+  fence.classList.add('breached');
+  defenseMeter.classList.add('breached');
+  clearTimeout(breachTimer);
+  breachTimer = setTimeout(() => {
+    fence.classList.remove('breached');
+    defenseMeter.classList.remove('breached');
+  }, 260);
 }
 
 const abilities = [
@@ -173,16 +278,95 @@ const abilities = [
   {id: 'pierce', name: '穿透奶弹', detail: '奶弹可多命中一只企鹅', available: () => !defense.pierce,
     apply: () => { defense.pierce = true; }},
   {id: 'repair', name: '修补家门', detail: '恢复 1 点耐久', available: () => defense.lives < defense.maxLives,
-    apply: () => { defense.lives += 1; }},
+    apply: () => {
+      defense.lives += 1;
+      showBattlePop(50, 87, '+1 耐久', 'repair-pop');
+      showBattlePop(50, 87, '', 'gate-aura repair-aura');
+    }},
   {id: 'fence', name: '加固栅栏', detail: '耐久上限和当前耐久各 +1', available: () => defense.ranks.fence < 5,
-    apply: () => { defense.maxLives += 1; defense.lives += 1; }},
+    apply: () => {
+      defense.maxLives += 1;
+      defense.lives += 1;
+      showBattlePop(50, 87, '+1 耐久上限', 'fence-pop');
+      showBattlePop(50, 87, '', 'gate-aura fence-aura');
+    }},
   {id: 'sweep', name: '清场奶浪', detail: '击退当前场上的普通企鹅', available: () => true,
     apply: () => {
+      showBattlePop(50, 82, '', 'sweep-wave');
       for (const enemy of defense.enemies.slice()) {
         if (enemy.type === 'normal') defeatEnemy(enemy);
       }
     }},
 ];
+
+const autoSkills = [
+  {id: 'laugh', name: '捧腹大笑', seconds: 12, detail: '笑声冲击波伤害前方企鹅，并减速 1 秒'},
+  {id: 'bubbles', name: '奶泡连珠', seconds: 7, detail: '优先攻击离家门最近的企鹅，连发 3 枚半伤奶泡'},
+  {id: 'bounce', name: '肚皮弹弹', seconds: 10, detail: '家门前有企鹅时，将它们弹退'},
+];
+const autoSkillState = new Map();
+
+function skillCooldown(skill, rank) {
+  return skill.seconds * (1 - .15 * (rank - 1));
+}
+
+function triggerAutoSkills() {
+  for (const skill of autoSkills) {
+    const entry = autoSkillState.get(skill.id);
+    if (!entry || defense.time < entry.readyAt) continue;
+    const enemies = defense.enemies.slice().sort((a, b) => b.y - a.y);
+    if (enemies.length === 0) continue;
+    if (skill.id === 'bounce' && enemies[0].y < 66) continue;
+    entry.readyAt = defense.time + skillCooldown(skill, entry.rank);
+    showBattlePop(defense.x, 72, skill.name, 'skill-pop');
+    if (skill.id === 'laugh') {
+      showBattlePop(defense.x, 77, '', 'laugh-wave');
+      if (!muted && !playBattleBuffer(battleLaugh, battleLaughDuration)) {
+        battleLaugh.currentTime = 0;
+        battleLaugh.play().catch(() => {});
+        clearTimeout(battleLaughTimer);
+        battleLaughTimer = setTimeout(() => battleLaugh.pause(), battleLaughDuration * 1000);
+      }
+      for (const enemy of enemies) {
+        enemy.slowUntil = defense.time + 1;
+        damageEnemy(enemy, defense.damage);
+      }
+    } else if (skill.id === 'bubbles') {
+      showBattlePop(defense.x, 79, '', 'bubble-ring');
+      for (let i = 0; i < 3; i++) {
+        launchBubble(enemies[0], i);
+      }
+    } else {
+      showBattlePop(50, 80, '', 'bounce-wave');
+      for (const enemy of enemies) {
+        if (enemy.y < 66) break;
+        showBattlePop(enemy.x, enemy.y, '↑', 'bounce-arrow');
+        enemy.y -= 14;
+        placeActor(enemy);
+        milkSplash(enemy.x, enemy.y);
+      }
+    }
+  }
+}
+
+function launchBubble(target, index) {
+  const element = document.createElement('span');
+  element.className = 'milk-shot skill-bubble';
+  const shot = {element, target, x: defense.x + (index - 1) * 5, y: 79, damage: defense.damage / 2};
+  placeActor(shot);
+  fieldActors.append(element);
+  defense.shots.push(shot);
+}
+
+function skillCard(skill) {
+  const rank = (autoSkillState.get(skill.id)?.rank || 0) + 1;
+  const cooldown = skillCooldown(skill, rank);
+  return {
+    ...skill, rare: true,
+    detail: 'Lv.' + rank + ' · 冷却 ' + Number(cooldown.toFixed(2)) + ' 秒 · ' + skill.detail,
+    apply: () => autoSkillState.set(skill.id, {rank, readyAt: defense.time + cooldown}),
+  };
+}
 
 function offerUpgrade() {
   battlefield.classList.add('upgrade-paused');
@@ -191,20 +375,36 @@ function offerUpgrade() {
   const options = byId('defense-cards');
   options.replaceChildren();
   const eligible = abilities.filter(card => card.available());
-  const choices = Math.min(3, eligible.length);
-  for (let i = 0; i < choices; i++) {
-    const [card] = eligible.splice(Math.floor(Math.random() * eligible.length), 1);
+  const skills = autoSkills.filter(skill => (autoSkillState.get(skill.id)?.rank || 0) < 3);
+  const cards = [];
+  if (skills.length && Math.random() < .30) {
+    cards.push(skillCard(skills[Math.floor(Math.random() * skills.length)]));
+  }
+  while (cards.length < 3 && eligible.length) {
+    cards.push(...eligible.splice(Math.floor(Math.random() * eligible.length), 1));
+  }
+  for (const card of cards) {
     const button = document.createElement('button');
+    const icon = document.createElement('img');
+    const copy = document.createElement('div');
     const title = document.createElement('strong');
     const detail = document.createElement('span');
     title.textContent = card.name;
     detail.textContent = card.detail;
     button.type = 'button';
-    button.append(title, detail);
+    icon.src = '素材/技能图标/' + card.id + '.png';
+    icon.alt = '';
+    icon.draggable = false;
+    if (card.rare) button.className = 'rare-skill-card';
+    copy.append(title, detail);
+    button.append(icon, copy);
     button.addEventListener('click', () => {
       if (!upgrades.open) return;
       card.apply();
-      defense.ranks[card.id] += 1;
+      if (!card.rare) defense.ranks[card.id] += 1;
+      if (['rate', 'damage', 'paths', 'pierce'].includes(card.id)) {
+        showBattlePop(defense.x, 74, card.name, 'upgrade-pop');
+      }
       showDefenseRanks();
       defense.pending -= 1;
       defenseStatus();
@@ -220,8 +420,13 @@ function offerUpgrade() {
 }
 
 function defeatEnemy(enemy) {
-  milkSplash(enemy.x, enemy.y);
-  enemy.element.remove();
+  const elite = enemy.type !== 'normal';
+  milkSplash(enemy.x, enemy.y, elite);
+  if (elite) showBattlePop(enemy.x, enemy.y, '+50');
+  enemy.element.classList.add('invader-defeated');
+  enemy.element.addEventListener('animationend', event => {
+    if (event.target === enemy.element) enemy.element.remove();
+  });
   defense.enemies = defense.enemies.filter(entry => entry !== enemy);
   defense.kills += 1;
   if (enemy.type === 'normal') playPenguinCry();
@@ -230,8 +435,45 @@ function defeatEnemy(enemy) {
   if (enemy.type !== 'normal') defense.pending += 1;
 }
 
+function damageEnemy(enemy, damage) {
+  enemy.hp -= damage;
+  if (enemy.hp <= 0) return defeatEnemy(enemy);
+  milkSplash(enemy.x, enemy.y);
+  enemy.element.querySelector('.invader-body').animate(
+    [{filter: 'brightness(2.3)'}, {filter: 'brightness(1)'}], {duration: 100});
+  if (enemy.health) {
+    enemy.health.value = enemy.hp;
+    enemy.badgeLabel.textContent = eliteNames[enemy.type] + ' ' + enemy.hp;
+  } else if (enemy.badge) enemy.badge.textContent = enemy.hp;
+}
+
 function moveShots(dt) {
+  let hit = false;
   defense.shots = defense.shots.filter(shot => {
+    if (shot.target) {
+      if (!defense.enemies.includes(shot.target)) {
+        shot.target = defense.enemies.reduce((closest, enemy) =>
+          !closest || enemy.y > closest.y ? enemy : closest, null);
+        if (!shot.target) {
+          shot.element.remove();
+          return false;
+        }
+      }
+      const dx = shot.target.x - shot.x;
+      const dy = shot.target.y - shot.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance <= Math.max(4, 155 * dt)) {
+        showBattlePop(shot.target.x, shot.target.y, '', 'bubble-ring');
+        damageEnemy(shot.target, shot.damage);
+        hit = true;
+        shot.element.remove();
+        return false;
+      }
+      shot.x += dx / distance * 155 * dt;
+      shot.y += dy / distance * 155 * dt;
+      placeActor(shot);
+      return true;
+    }
     const previousY = shot.y;
     shot.y -= 105 * dt;
     for (const enemy of defense.enemies.slice().sort((a, b) => b.y - a.y)) {
@@ -239,12 +481,9 @@ function moveShots(dt) {
           shot.y > enemy.y + 4 || previousY < enemy.y - 4) continue;
       shot.hits.add(enemy);
       shot.remaining -= 1;
-      enemy.hp -= shot.damage;
-      if (enemy.hp <= 0) defeatEnemy(enemy);
-      else {
-        milkSplash(enemy.x, enemy.y);
-        if (enemy.badge) enemy.badge.textContent = enemy.type === 'normal' ? enemy.hp : eliteNames[enemy.type] + ' ' + enemy.hp;
-      }
+      if (shot.remaining > 0) showBattlePop(enemy.x, enemy.y, '', 'pierce-glint');
+      hit = true;
+      damageEnemy(enemy, shot.damage);
       if (!shot.remaining) break;
     }
     if (shot.remaining && shot.y > -5 && shot.x > -5 && shot.x < 105) {
@@ -254,12 +493,29 @@ function moveShots(dt) {
     shot.element.remove();
     return false;
   });
+  if (hit && defense.time >= defense.nextHitSound) {
+    defense.nextHitSound = defense.time + .075;
+    playTone(620, 240, .055, .055);
+  }
 }
 
 function defenseStatus() {
-  byId('result').textContent = '第 ' + defense.wave + ' 波 · 家门 ' + defense.lives + '/' + defense.maxLives +
+  const status = byId('result');
+  const caption = '第 ' + defense.wave + ' 波 · 家门 ' + Math.max(0, defense.lives) + '/' + defense.maxLives +
     ' · ' + defense.score + ' 分 · ' + Math.floor(defense.time) + ' 秒';
+  if (status.textContent !== caption) status.textContent = caption;
   byId('fill').style.width = Math.max(0, defense.lives / defense.maxLives * 100) + '%';
+  milestoneProgress.value = Math.min(defenseMilestoneSeconds, Math.floor(defense.time));
+  const label = defense.time >= defenseMilestoneSeconds ? '+' + defenseMilestoneCoins + ' 金币待结算' :
+    '守满 ' + defenseMilestoneSeconds + ' 秒得 ' + defenseMilestoneCoins + ' 金币';
+  if (milestoneText.textContent !== label) milestoneText.textContent = label;
+  const skillStatus = byId('defense-skill-status');
+  const timers = autoSkills.filter(skill => autoSkillState.has(skill.id)).map(skill => {
+    const {rank, readyAt} = autoSkillState.get(skill.id);
+    const left = Math.ceil(readyAt - defense.time);
+    return skill.name + ' Lv.' + rank + ' · ' + (left > 0 ? left + '秒' : '就绪');
+  }).join('｜');
+  if (skillStatus.textContent !== timers) skillStatus.textContent = timers;
 }
 
 function showDefenseRanks() {
@@ -279,6 +535,12 @@ function finishDefense() {
   }
   finish(0, false, '第 ' + defense.wave + ' 波 · 坚持 ' + Math.floor(defense.time) + ' 秒 · 击退 ' +
     defense.kills + ' 只 · ' + defense.score + ' 分｜最高 ' + defenseBest);
+  const {battle, milestone} = defenseCoinBreakdown();
+  const targetOffer = ['cannon', 'gate'].find(id => !wallet.owned.includes(id));
+  const next = targetOffer ? offers[targetOffer] : null;
+  const remaining = next ? next.price - wallet.coins : 0;
+  byId('defense-rewards').textContent = '本局累计 · 战斗 ' + battle + ' 金币 · 里程碑 ' + milestone + ' 金币' +
+    (next ? remaining > 0 ? '｜距' + next.name + '还差 ' + remaining + ' 金币' : '｜可购买' + next.name : '');
 }
 
 function reviveDefense(round) {
@@ -290,6 +552,7 @@ function reviveDefense(round) {
   defense.nextEnemy = Math.max(defense.nextEnemy, defense.time + 1.4);
   defense.nextElite = Math.max(defense.nextElite, defense.time + 2);
   defense.nextShot = defense.time;
+  defense.nextHitSound = defense.time;
   defense.last = performance.now();
   state = 'playing';
   stage.dataset.state = state;
@@ -298,6 +561,17 @@ function reviveDefense(round) {
   defenseStatus();
   frame = requestAnimationFrame(defenseTick);
   return true;
+}
+
+function afterBattleFeedback(next) {
+  const endAt = performance.now() + 230;
+  endDefenseDrag();
+  function waitForFeedback(now) {
+    if (state !== 'playing' || levelId !== 'defense') return;
+    if (now >= endAt) next();
+    else frame = requestAnimationFrame(waitForFeedback);
+  }
+  frame = requestAnimationFrame(waitForFeedback);
 }
 
 function defenseTick(now) {
@@ -329,29 +603,57 @@ function defenseTick(now) {
     const sprinting = enemy.type === 'dash' && age >= 1.05;
     enemy.element.classList.toggle('sprinting', sprinting);
     const speed = enemy.type === 'armor' ? .7 : enemy.type === 'dash' ? (sprinting ? 2 : .52) : 1;
-    enemy.y += enemy.speed * speed * dt;
+    enemy.y += enemy.speed * speed * dt * (enemy.slowUntil > defense.time ? .55 : 1);
     if (enemy.type === 'sway') enemy.x = Math.max(6, Math.min(94, enemy.origin + Math.sin(age * 4) * 13));
     placeActor(enemy);
   }
   moveShots(dt);
+  triggerAutoSkills();
   const livesBeforeBreach = defense.lives;
   defense.enemies = defense.enemies.filter(enemy => {
     if (enemy.y < 85) return true;
     enemy.element.remove();
     defense.lives -= 1;
+    showBattlePop(enemy.x, 85, '−1 耐久', 'breach-pop');
     return false;
   });
-  if (defense.lives < livesBeforeBreach) playEliteSound();
+  if (defense.lives < livesBeforeBreach) {
+    flashBreach();
+    playEliteSound();
+  }
   defenseStatus();
-  if (defense.lives <= 0) return finishDefense();
-  if (defense.pending > 0) return offerUpgrade();
+  if (defense.lives <= 0) return afterBattleFeedback(finishDefense);
+  if (defense.pending > 0) return afterBattleFeedback(offerUpgrade);
   frame = requestAnimationFrame(defenseTick);
 }
 
 action.addEventListener('click', () => {
   if (levelId !== 'defense' || levelHome.open || shop.open || state === 'playing') return;
+  if (!defenseStorySeen) {
+    if (!defenseStory.open) defenseStory.showModal();
+    return;
+  }
+  startDefense();
+});
+
+function dismissDefenseStory() {
+  if (!defenseStory.open) return;
+  defenseStorySeen = true;
+  defenseStory.close();
+  startDefense();
+}
+
+byId('defense-story-skip').addEventListener('click', dismissDefenseStory);
+byId('defense-story-start').addEventListener('click', dismissDefenseStory);
+defenseStory.addEventListener('cancel', event => {
+  event.preventDefault();
+  dismissDefenseStory();
+});
+
+function startDefense() {
   startRound('', '企鹅来了！');
   stopDefenseSounds();
+  loadBattleAudio();
   if (!muted) {
     penguinCry.muted = true;
     penguinCry.play().then(() => {
@@ -367,9 +669,10 @@ action.addEventListener('click', () => {
   const lives = defenseLives();
   Object.assign(defense, {time: 0, last: performance.now(), wave: 1, score: 0, kills: 0,
     lives, maxLives: lives, damage: boosted('cannon') ? 2 : 1, rate: initialFireInterval, paths: 1,
-    pierce: false, nextShot: 0, nextEnemy: .5, nextElite: 20, eliteIndex: 0, pending: 0});
+    pierce: false, nextShot: 0, nextHitSound: 0, nextEnemy: .5, nextElite: 20, eliteIndex: 0, pending: 0});
   defense.round += 1;
   defense.reviveUsed = false;
+  autoSkillState.clear();
   defense.rewardPaid = 0;
   defense.ranks = Object.fromEntries(abilities.map(card => [card.id, 0]));
   showDefenseRanks();
@@ -378,16 +681,17 @@ action.addEventListener('click', () => {
   battlefield.focus();
   defenseStatus();
   frame = requestAnimationFrame(defenseTick);
-});
+}
 
 function dragShooter(event) {
-  const bounds = battlefield.getBoundingClientRect();
-  positionShooter((event.clientX - bounds.left) / bounds.width * 100);
+  const width = battlefield.getBoundingClientRect().width;
+  if (width > 0) positionShooter(dragOrigin.shooterX + (event.clientX - dragOrigin.clientX) / width * 100);
 }
 
 function endDefenseDrag() {
   const pointer = dragPointer;
   dragPointer = null;
+  dragOrigin = null;
   battlefield.removeAttribute('data-dragging');
   if (pointer !== null && battlefield.hasPointerCapture(pointer)) {
     battlefield.releasePointerCapture(pointer);
@@ -404,9 +708,9 @@ battlefield.addEventListener('pointerdown', event => {
   if (state !== 'playing' || upgrades.open || dragPointer !== null || event.button !== 0) return;
   event.preventDefault();
   dragPointer = event.pointerId;
+  dragOrigin = {clientX: event.clientX, shooterX: defense.x};
   battlefield.setPointerCapture(event.pointerId);
   battlefield.setAttribute('data-dragging', '');
-  dragShooter(event);
 });
 battlefield.addEventListener('pointermove', event => {
   if (event.pointerId !== dragPointer) return;

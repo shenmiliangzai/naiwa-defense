@@ -158,12 +158,16 @@ sound.addEventListener('click', () => {
   muted = !muted;
   laugh.muted = fail.muted = muted;
   if (muted) stopDefenseSounds();
+  else if (levelId === 'defense') {
+    unlockAudio();
+    loadBattleAudio();
+  }
   sound.textContent = muted ? '开声音' : '静音';
   sound.setAttribute('aria-pressed', String(muted));
 });
 
 document.addEventListener('keydown', event => {
-  if (byId('level-home').open || byId('shop').open || event.key === ' ' && action.hidden) return;
+  if (byId('level-home').open || byId('shop').open || byId('defense-story').open || event.key === ' ' && action.hidden) return;
   if (levelId === 'hold') return;
   if (event.code !== 'Space' || event.target.closest('button')) return;
   event.preventDefault();

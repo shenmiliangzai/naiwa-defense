@@ -34,7 +34,7 @@
 @keyframes penguin-run{from{transform:rotate(-8deg) translateY(-2px)}to{transform:rotate(8deg) translateY(1px)}}@keyframes penguin-foot{to{transform:translateY(6px) rotate(12deg)}}@keyframes milk-pop{to{transform:translate(-50%,-50%) scale(1.65);opacity:0}}@media(prefers-reduced-motion:reduce){.invader-body,.invader i{animation:none}}
 </style>
 <style>
-.upgrade-paused .invader-body,.upgrade-paused .invader i{animation-play-state:paused}.stage[data-mode=defense][data-state=playing] .defense-board{right:76px}.defense-stats{display:none;position:absolute;z-index:2;inset:0 0 0 auto;width:76px;padding:8px 5px;background:#fcf0cf;border-left:1px solid #a77a4e;font-size:11px}.stage[data-mode=defense][data-state=playing] .defense-stats{display:block}.defense-stats h2{font-size:12px;margin:0 0 8px}.defense-stats dl{margin:0}.defense-stats dl div{display:flex;justify-content:space-between;align-items:center;gap:2px;padding:5px 0;border-top:1px solid #dccba3}.defense-stats dd{margin:0;font-weight:800;overflow-wrap:anywhere}.defense-stats dd:empty{display:none}
+.upgrade-paused .invader-body,.upgrade-paused .invader i{animation-play-state:paused}.defense-stats{display:none;background:#fcf0cf;font-size:11px}.defense-stats dl{margin:0}.defense-stats dl div{display:flex;justify-content:space-between;align-items:center;gap:2px}.defense-stats dd{margin:0;font-weight:800;overflow-wrap:anywhere}
 </style>
 <style>
 .invader,.invader-body,.invader i,.invader b{border:0;outline:0}.invader.armor .invader-body{filter:none}
@@ -48,6 +48,91 @@
 #ad-defense-result:has(#ad-defense-revive:not([hidden])){border:2px solid #a17b2d;background:#fff3c3;padding:12px;margin-top:15px;border-radius:16px}
 #ad-defense-revive{display:block;width:100%;min-height:54px;margin:0 0 10px;padding:9px 12px;border:2px solid #30230a;border-radius:12px;background:#ffcd4d;color:#30230a;font-size:clamp(17px,5vw,22px);font-weight:900;box-shadow:0 3px #30230a;cursor:pointer}
 #ad-defense-revive[hidden]{display:none}#ad-defense-revive:enabled:hover{background:#ffdb76}#ad-defense-revive:enabled:active{transform:translateY(2px);box-shadow:0 1px #30230a}
+</style>
+<style>
+main:has(.stage[data-mode="defense"][data-state="playing"]) {
+  width: min(100%, 640px);
+  padding: 10px clamp(8px, 2.5vw, 16px);
+}
+main:has(.stage[data-mode="defense"][data-state="playing"]) :is(#title, #instructions, #target-hint, #shop-button, small) {
+  display: none;
+}
+.stage[data-mode="defense"][data-state="playing"] {
+  height: clamp(240px, calc(100svh - 160px), 760px);
+  height: clamp(240px, calc(100dvh - 160px), 760px);
+  margin-top: 6px;
+}
+.stage[data-mode="defense"][data-state="playing"] ~ .meter { height: 10px; margin: 5px 0 0; }
+.stage[data-mode="defense"][data-state="playing"] ~ .result { min-height: 0; margin: 5px 0; font-size: 13px; }
+.stage[data-mode="defense"][data-state="playing"] + .defense-stats {
+  display: block;
+  padding: 4px 6px;
+  margin-top: 4px;
+  border: 1px solid #dccba3;
+  border-radius: 8px;
+}
+.defense-stats dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 8px; }
+.defense-stats dl div { padding: 1px 0; }
+</style>
+<style>
+.defense-milestone,.defense-rewards{display:none}
+.stage[data-mode="defense"][data-state="playing"] + .defense-stats .defense-milestone{display:flex;gap:8px;align-items:center;margin:3px 0 0;color:#573f1d}
+.defense-milestone progress{width:64px;height:8px;accent-color:#527330}
+.stage[data-mode="defense"][data-state="lost"] ~ .defense-rewards{display:block;margin:0 0 10px;font-size:13px;color:#573f1d}
+.milk-shot::after{content:'';position:absolute;top:85%;left:2px;width:2px;height:11px;background:linear-gradient(#e1ad50,transparent)}
+.invader-defeated{animation:invader-out .2s ease-out both}
+.invader-defeated .invader-body,.invader-defeated i{animation:none}
+@keyframes invader-out{to{transform:translate(-50%,-45%) scale(.65);opacity:0}}
+.elite-health{display:block;width:100%;height:4px;border:0;accent-color:#8a3e2d}
+.milk-splash.defeat-splash{width:40px;height:40px;border-width:5px}
+.defense-pop{position:absolute;z-index:3;pointer-events:none;color:#603b11;font-size:13px;font-weight:900;white-space:nowrap;text-shadow:0 1px #fff;animation:defense-pop .44s ease-out both}
+.defense-pop.breach-pop{color:#9d211d}
+.yard-fence.breached{background-color:#f7756c;border-top-color:#a72922}
+.meter.breached .fill{background:#c73831}
+@keyframes defense-pop{from{transform:translate(-50%,-50%)}to{transform:translate(-50%,-28px);opacity:0}}
+@media(prefers-reduced-motion:reduce){.defense-pop{animation-name:defense-fade}@keyframes defense-fade{to{opacity:0}}}
+</style>
+<style>
+#defense-cards .rare-skill-card{background:#7940ab;color:#fff;border-color:#4e236f}
+#defense-cards button{display:flex;align-items:center;gap:10px}
+#defense-cards img{width:50px;height:50px;flex:none;border-radius:8px;object-fit:cover}
+#defense-cards .rare-skill-card:is(:hover,:focus-visible){background:#613184}
+#defense-skill-status{margin:4px 0 0;color:#613184}
+#defense-skill-status:empty{display:none}
+.skill-pop{color:#613184}.skill-bubble{width:12px;height:12px;border:2px solid #864bbc;background:#ead8ff}
+.laugh-wave{width:45px;height:25px;border:3px solid #864bbc;border-bottom-color:transparent;border-radius:50%;animation:laugh-wave .42s ease-out both}
+@keyframes laugh-wave{from{transform:translate(-50%,-50%)}to{transform:translate(-50%,-65px) scale(7,3);opacity:0}}
+@media(prefers-reduced-motion:reduce){.laugh-wave{animation-name:defense-fade}}
+</style>
+<style>
+.defense-board{background:#c9e4f5 url('素材/奶蛙守家-雪地战场.png') center top / cover no-repeat}
+.defense-story{padding:0;background:#fff8df}
+.defense-story article{padding:18px 20px 20px}
+.defense-story h2{font-size:clamp(23px,6vw,30px);margin:0 0 12px;line-height:1.2}
+.defense-story p{line-height:1.65;margin:0 0 10px;font-size:14px}
+.defense-story-preview{height:72px;background:#c9e4f5 url('素材/奶蛙守家-雪地战场.png') center top / cover no-repeat;border-bottom:2px solid #25271a}
+.defense-story-actions{display:flex;gap:10px;align-items:center;margin-top:14px}
+.defense-story-actions .home-link{flex:none}
+</style>
+<style>
+.charged-shot{background:#fff1a8;border-color:#b97c1c;box-shadow:0 0 7px #f9c94f}
+.piercing-shot::after{background:linear-gradient(#468ea5,transparent)}
+.rapid-flash,.bubble-ring,.pierce-glint{border-radius:50%;animation:skill-ring .26s ease-out both}
+.rapid-flash{width:13px;height:13px;background:#ffe08b;border:2px solid #fff5cf}
+.bubble-ring{width:19px;height:19px;border:3px dashed #8e54bd;background:#ebd6ff80}
+.pierce-glint{width:10px;height:24px;border:2px solid #35819a;background:#c3f4ffb3}
+.bounce-wave{width:90%;height:22px;border-top:4px solid #f4a935;border-radius:55%;background:#fff0a766;animation:bounce-wave .34s ease-out both}
+.bounce-arrow{color:#aa5e0e;font-size:23px}
+.sweep-wave{width:104%;height:38px;border-radius:62% 38% 45% 55%;background:linear-gradient(#fffdf2,#fff3beaa);border-top:4px solid #fff;box-shadow:0 -4px 12px #f8d77180;animation:sweep-wave .65s ease-out both}
+.gate-aura{width:96%;height:24px;border:2px solid;border-radius:10px;animation:gate-aura .58s ease-out both}
+.repair-aura{border-color:#409c56;background:#b2f5ad80}
+.fence-aura{border-color:#4c869b;background:#a8e6ff99}
+.repair-pop{color:#287746}.fence-pop{color:#256279}.upgrade-pop{color:#775014}
+@keyframes skill-ring{from{transform:translate(-50%,-50%) scale(.65)}to{transform:translate(-50%,-50%) scale(1.75);opacity:0}}
+@keyframes bounce-wave{from{transform:translate(-50%,0) scaleX(.65)}to{transform:translate(-50%,-28px) scaleX(1.08);opacity:0}}
+@keyframes sweep-wave{0%{transform:translate(-50%,-50%)}100%{top:0;transform:translate(-50%,-75%);opacity:0}}
+@keyframes gate-aura{from{transform:translate(-50%,-50%);opacity:1}to{transform:translate(-50%,-60%) scaleY(1.5);opacity:0}}
+@media(prefers-reduced-motion:reduce){.rapid-flash,.bubble-ring,.pierce-glint,.bounce-wave,.sweep-wave,.gate-aura{animation-name:defense-fade;transform:translate(-50%,-50%)}}
 </style>
 <main>
   <header><span>奶蛙 × 凑企鹅</span><button class="sound" id="shop-button" type="button">金币商店</button><button class="sound" id="sound" type="button" aria-pressed="false">静音</button></header>
@@ -66,8 +151,10 @@
       <div id="defense-actors" aria-hidden="true"></div>
       <div class="yard-shooter" id="defense-shooter" aria-hidden="true"></div>
     </div>
+    <div class="rhythm-track" id="rhythm-track"><div class="rhythm-line"></div></div>
+    <div class="challenge" id="challenge"></div>
+  </div>
     <aside class="defense-stats" aria-label="本局能力等级">
-      <h2>本局能力</h2>
       <dl>
         <div><dt>战力</dt><dd id="defense-power"></dd></div>
         <div><dt>射速</dt><dd id="defense-rate"></dd></div>
@@ -78,13 +165,13 @@
         <div><dt>栅栏</dt><dd id="defense-fence"></dd></div>
         <div><dt>奶浪</dt><dd id="defense-sweep"></dd></div>
       </dl>
+      <p class="defense-milestone"><progress id="defense-milestone-progress" aria-label="守家金币目标进度"></progress><span id="defense-milestone-text"></span></p>
+      <p id="defense-skill-status" aria-label="自动技能冷却"></p>
     </aside>
-    <div class="rhythm-track" id="rhythm-track"><div class="rhythm-line"></div></div>
-    <div class="challenge" id="challenge"></div>
-  </div>
   <div class="meter" aria-hidden="true"><div class="fill" id="fill"></div><div class="zone"></div><div class="needle" id="needle"></div></div>
   <div class="hint" id="target-hint">绿区 92%–99%</div>
   <div id="result" class="result" role="status">最高分 0</div>
+  <p class="defense-rewards" id="defense-rewards"></p>
   <button id="action" class="action" type="button">开始膨胀</button>
   <div class="choices" id="choices" hidden>
     <button class="action" type="button" id="choice-left"></button>
@@ -136,6 +223,18 @@
 <audio id="laugh" preload="auto" src="素材/奶蛙-捧腹大笑-桌宠版.wav"></audio>
 <audio id="fail" preload="auto" src="素材/凑企鹅-高松灯二创-咕咕嘎嘎-超绝尾音.mp3"></audio>
 <style>.stage[data-mode=endless] .pump{display:none}</style>
+<dialog class="level-home defense-story" id="defense-story" aria-labelledby="defense-story-title">
+  <div class="defense-story-preview" aria-hidden="true"></div>
+  <article>
+    <h2 id="defense-story-title">一场由冰箱引发的围攻</h2>
+    <p>凌晨三点，奶蛙的冰箱打了个嗝。隔壁凑企鹅听成了「咕咕嘎嘎，全场自助」，当场摇来三百个亲戚。第一个戴铁桶说自己订了包间，第二个一路滑铲，第三个说它只是来借盐，手里却攥着一把勺。</p>
+    <p>奶蛙打开门，发现家门口已经排上号了。它低头看看最后一盒牛奶，又抬头看看队伍，笑得肚皮一抖。第一发奶弹就这么飞了出去。</p>
+    <div class="defense-story-actions">
+      <button class="home-link" id="defense-story-skip" type="button">跳过剧情</button>
+      <button class="action" id="defense-story-start" type="button">守住冰箱！</button>
+    </div>
+  </article>
+</dialog>
 <dialog class="level-home defense-upgrades" id="defense-upgrades" aria-labelledby="defense-upgrades-title">
   <h2 id="defense-upgrades-title">选一张强化卡</h2>
   <p>击退了强化企鹅。选好就继续守家。</p>
